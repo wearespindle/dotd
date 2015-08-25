@@ -1,0 +1,40 @@
+<canvas id="c" width="1900" height="1080"></canvas>
+
+
+<div id="drawing-options">
+    <button id="drawing-mode" class="btn btn-info">Klieder mode</button><br>
+    <button id="clear-canvas" class="btn btn-info">Alles wegpoetsen</button><br>
+
+    <div id="drawing-mode-options">
+        <label for="drawing-mode-selector">Mode:</label>
+        <select id="drawing-mode-selector">
+        <option>Pencil</option>
+        <option>Circle</option>
+        <option>Spray</option>
+        <option>Pattern</option>
+
+        <option>hline</option>
+        <option>vline</option>
+        <option>square</option>
+        <option>diamond</option>
+        <option>texture</option>
+        </select><br>
+
+        <label for="drawing-line-width">Lijn breedte:</label>
+        <span class="info">30</span>
+        <label for="drawing-color">Lijn kleur:</label>
+        <input type="color" value="#005E7A" id="drawing-color"><br>
+        <input type="range" value="30" min="0" max="150" id="drawing-line-width"><br>
+
+
+    </div>
+</div>
+
+<script>
+window.initialState = {{{canvasState}}};
+(function() {
+    document.addEventListener("DOMContentLoaded", function(event) {
+        new PasciDraw()
+    })
+})();
+</script>
