@@ -8,7 +8,7 @@ Installation and usage
 
 ::
 
-    git clone git@github.com:jvanveen/dotd.git
+    git clone git@github.com:wearespindle/dotd.git
     cd dotd
     npm install
     gulp
