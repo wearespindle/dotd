@@ -1,5 +1,23 @@
-body {
+/* latin-ext */
+@font-face {
+  font-family: 'Oxygen';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Oxygen'), local('Oxygen-Regular'), url(/oxygen.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+1E00-1EFF, U+20A0-20AB, U+20AD-20CF, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Oxygen';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Oxygen'), local('Oxygen-Regular'), url(/oxygen.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
+}
 
+
+body {
+    font-family: 'Oxygen', sans-serif;
 }
 
 
@@ -9,17 +27,31 @@ canvas {
 
 * {
     margin: 0;
-    padding: 0; box-sizing: border-box;
+    padding: 0;
+    box-sizing: border-box;
 }
 
+label {
+    width: 100%;
+    display: block;
+    margin-bottom: 5px;
+}
 
+input[type=range] {
+    width: 100%;
+}
+
+select {
+    width: 100%;
+    margin-bottom: 5px;
+}
 
 #drawing-options {
-    width: 250px; 
+    width: 250px;
     position: absolute;
     top: 0;
     right: 0;
-    background: rgba(46, 53, 71, 0.5);
+    background: rgba(46, 53, 71, 0.9);
     border: 3px solid #f2cc10;
     color: #fff;
     padding: 10px;
@@ -32,4 +64,17 @@ canvas {
     select {
         padding: 5px;
     }
+}
+
+#edit-mode-options {
+    display: none;
+}
+
+#card-day {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #666;
 }
