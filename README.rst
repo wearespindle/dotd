@@ -7,6 +7,7 @@ Installation and usage
 ----------------------
 
 ::
+
     git clone git@github.com:jvanveen/dotd.git
     cd dotd
     npm install
