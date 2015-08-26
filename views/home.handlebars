@@ -1,42 +1,30 @@
 <canvas id="c" width="1900" height="1080"></canvas>
-<div id="card-day"></div>
+<div id="dolphin-day"></div>
 
 <div id="drawing-options">
-    <button id="drawing-mode" class="btn btn-info">Edit dolphinword card</button><br>
+    <button id="drawing-mode" class="btn btn-info">Edit scene</button><br>
 
     <div id="drawing-mode-options">
-        <label for="drawing-mode-selector">Mode</label>
+        <label for="drawing-mode-selector">Brush Type</label>
         <select id="drawing-mode-selector">
-            <option>Pencil</option>
-            <!-- <option>Circle</option>
-            <option>Spray</option>
-            <option>Pattern</option>
-
-            <option>hline</option>
-            <option>vline</option>
-            <option>square</option>
-            <option>diamond</option>
-            <option>texture</option> -->
+            <option value="pencil">Pencil</option>
+            <option value="circle">Circle</option>
+            <option value="spray">Spray (DB-Intensive)</option>
+            <option value="hline">Horizontal lines</option>
+            <option value="vline">Vertical lines</option>
+            <option value="square">Squares</option>
+            <option value="diamond">Diamonds</option>
         </select>
 
-        <label for="drawing-line-width">Line Width</label>
+        <label for="drawing-line-width">Brush Width</label>
         <span id="drawing-line-width-info">3</span>
         <input type="range" value="3" min="0" max="150" id="drawing-line-width"><br/>
 
-        <label for="drawing-color">Line Color</label>
+        <label for="drawing-color">Brush Color</label>
         <input type="color" id="drawing-color"><br>
     </div>
 
     <div id="edit-mode-options">
-        <button id="clear-canvas" class="btn btn-info">Clear Canvas</button><br>
+        <button id="clear-canvas" class="btn warning">Clear Canvas</button><br>
     </div>
 </div>
-
-<script>
-window.initialState = {{{canvasState}}};
-(function() {
-    document.addEventListener("DOMContentLoaded", function(event) {
-        new DolphinBoard()
-    })
-})();
-</script>

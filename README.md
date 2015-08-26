@@ -1,2 +1,2 @@
-# dolphindraw
-Collaboratively draw your daily dolphin word postcard.
+# Dolphin Of The Day
+Collaboratively draw your daily Dolphin Of The Day.

@@ -1,101 +1,76 @@
-var express = require('express');
+'use strict'
+
 var app = require('express')()
-var fabric = require('fabric').fabric
-var http = require('http').Server(app)
-var io = require('socket.io')(http)
+var compression = require('compression')
 var exphbs = require('express-handlebars')
+var express = require('express')
+var Io = require('socket.io')
+var http = require('http')
 var loki = require('lokijs')
 var moment = require('moment')
 
+var common = require('./lib/common.js')
+
+var server = http.Server(app)
+var io = Io(server)
+
 var canvas, pathsCollection
-var dayOftheWeek = parseInt(moment().format('e'))
-
-app.engine('handlebars', exphbs({defaultLayout: 'main'}))
-app.set('view engine', 'handlebars')
 
 
-function getOrCreateDayPaths() {
-    return app.db.getCollection('paths').find({day: parseInt(moment().format('e'))})
+function getFabricObjects() {
+    return app.db.getCollection('paths').find({day: parseInt(moment().format('e'), 10)})
 }
 
 
+/**
+ *  Rebuild the canvas from Loki.
+ */
 function getCanvas() {
-    var canvas = fabric.createCanvasForNode(1280, 800)
-    fabric.util.enlivenObjects(getOrCreateDayPaths(), function(objects) {
+    var _canvas = fabric.createCanvasForNode(1900, 1080)
+    var fabricObjects = getFabricObjects()
+
+    if(fabricObjects) {
+        fabricObjects.forEach(function(obj) {
+            // Revive the objects property for a group.
+            if(obj.type === 'group') {
+                obj.objects = obj.__objects
+            }
+        })
+    }
+    fabric.util.enlivenObjects(fabricObjects, function(objects) {
         objects.forEach(function(o) {
-            canvas.add(o)
+            // Please note that a deserialize custom brush(stroke property) is
+            // an anonymous function coming from the client. Potential recipe
+            // for security issues.
+            _canvas.add(o)
         })
     })
-    return canvas
+    return _canvas
 }
 
 // Reload the page when the next day occurs.
 setInterval(function() {
-    var currentDay = parseInt(moment().format('e'))
-    if(currentDay !== dayOftheWeek) {
+    var currentDay = parseInt(moment().format('e'), 10)
+    if(currentDay !== app.dayOftheWeek) {
         canvas = getCanvas()
     }
 }, 3000)
 
 
-function uuid() {
-    return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8)
-        return v.toString(16)
-    });
-}
-
-fabric.Object.prototype.setOptions = (function (setOptions) {
-    return function (options) {
-        setOptions.apply(this, [options])
-        this.uuid = this.uuid || uuid()
-        this.day = dayOftheWeek
-    }
-})(fabric.Object.prototype.setOptions)
-
-fabric.Object.prototype.toObject = (function (toObject) {
-    return function (propertiesToInclude) {
-        propertiesToInclude = (propertiesToInclude || []).concat(['uuid', 'day'])
-        return toObject.apply(this, [propertiesToInclude])
-    };
-})(fabric.Object.prototype.toObject)
-
-
-/**
- * Item name is unique
- */
-fabric.Canvas.prototype.getObjectByUUID = function(uuid) {
-    var object = null
-    var objects = this.getObjects()
-
-    for (var i = 0, len = this.size(); i < len; i++) {
-        if (objects[i].uuid && objects[i].uuid === uuid) {
-            object = objects[i]
-            break
-        }
-    }
-
-    return object
-}
-
-
-io.on('connection', function(socket){
-
-    socket.on('disconnect', function() {
-
-    })
-
-
+io.on('connection', function(socket) {
     // A client adds a path.
     socket.on('object:added', function(msg) {
         var pathObj = JSON.parse(msg)
+        if(pathObj.type === 'group' && 'objects' in pathObj) {
+            pathObj.__objects = pathObj.objects
+            delete pathObj.fill
+        }
 
-        fabric.util.enlivenObjects([pathObj], function(objects) {
-            objects.forEach(function(fabricObj) {
-                // Notify other clients.
-                console.log(fabricObj)
+        fabric.util.enlivenObjects([pathObj], function(_objects) {
+            _objects.forEach(function(fabricObj) {
+                //delete fabricObj.fill
+                console.info('Adding %s with UUID: %s', pathObj.type, pathObj.uuid)
                 canvas.add(fabricObj)
-                console.info('Inserting object with UUID:', pathObj.uuid)
                 pathsCollection.insert(pathObj)
                 socket.broadcast.emit('object:added', pathObj)
             })
@@ -132,7 +107,7 @@ io.on('connection', function(socket){
 
         var fabricObj = canvas.getObjectByUUID(pathObj.uuid)
         if(fabricObj) {
-            console.info('Removing object with UUID:', pathObj.uuid)
+            console.info('Removing %s with UUID: %s', pathObj.type, pathObj.uuid)
             canvas.remove(fabricObj)
             var dbPath = pathsCollection.findOne({uuid: pathObj.uuid})
             if(dbPath) {
@@ -147,28 +122,77 @@ io.on('connection', function(socket){
 
     socket.on('canvas:clear', function() {
         console.info('Clearing canvas for today...')
-        var dbPaths = getOrCreateDayPaths()
+        var dbPaths = getFabricObjects()
         pathsCollection.remove(dbPaths)
         canvas.clear()
         socket.broadcast.emit('canvas:clear')
     })
-
 })
 
 app.use(express.static('public'))
+app.use(compression())
+
 
 app.get('/', function(req, res) {
-    res.render('home', {canvasState: JSON.stringify(canvas)})
+    var serializedCanvas = JSON.parse(JSON.stringify(canvas))
+    serializedCanvas.objects.forEach(function(obj, i) {
+        if(obj.type === 'group') {
+            // Somehow this is set to black during group serialization...
+            delete serializedCanvas.objects[i].fill
+        }
+    })
+
+    res.render('home', {canvasState: JSON.stringify(serializedCanvas)})
 })
 
 
-http.listen(3000, function() {
+/**
+ * Present the droodle data as a javascript file that can be
+ * retrieved as GZIP script.
+ */
+app.get('/state.js', function(req, res) {
+    var serializedCanvas = JSON.parse(JSON.stringify(canvas))
+    serializedCanvas.objects.forEach(function(obj, i) {
+        if(obj.type === 'group') {
+            // Somehow this is set to black during group serialization...
+            delete serializedCanvas.objects[i].fill
+        }
+    })
+
+    res.send('window.initialState = ' + JSON.stringify(serializedCanvas) + ';')
+})
+
+
+/**
+ * Retrieve the current DOTD droodle as a png.
+ */
+app.get('/dotd.png', function(req, res) {
+    res.writeHead(200, { 'Content-Type': 'image/png' })
+    var stream = canvas.createPNGStream()
+    stream.on('data', function(chunk) {
+        res.write(chunk)
+    });
+    stream.on('end', function() {
+        res.end()
+    });
+})
+
+
+server.listen(3000, function() {
+    moment.locale('nl')
+    app.engine('handlebars', exphbs({defaultLayout: 'main'}))
+    app.set('view engine', 'handlebars')
+    app.dayOftheWeek = parseInt(moment().format('e'), 10)
+    app.fabric = require('fabric').fabric
+    GLOBAL.fabric = app.fabric
+
+    common.init(app)
 
     app.db = new loki('db.json', {
         autosave: true,
         autosaveInterval: 3000,
         autoload: true,
-        autoloadCallback : function() {
+        autoloadCallback: function() {
             // if database did not exist it will be empty so I will intitialize here
             pathsCollection = app.db.getCollection('paths')
             if (!pathsCollection) {
@@ -178,6 +202,6 @@ http.listen(3000, function() {
 
             canvas = getCanvas()
         },
-        env: 'NODEJS'
+        env: 'NODEJS',
     })
 })

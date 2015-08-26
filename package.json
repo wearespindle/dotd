@@ -1,7 +1,7 @@
 {
-  "name": "Dolphinboard",
+  "name": "DOTD",
   "author": "Spindle Devhouse",
-  "description": "Draw dolphinwords every day of the week.",
+  "description": "Dolphin Of The Day - Draw Dolphin Words every day!",
   "license": "MIT",
   "version": "0.0.5",
   "engines": {
@@ -12,10 +12,19 @@
     "url": "https://github.com/wearespindle/dolphinboard/"
   },
   "dependencies": {
+    "compression": "^1.5.2",
     "express": "^4.13.3",
     "express-handlebars": "^2.0.1",
     "fabric": "^1.5.0",
     "moment": "^2.10.6",
     "socket.io": "^1.3.6"
+  },
+  "devDependencies": {
+    "browserify": "^11.0.1",
+    "gulp-if-else": "^1.0.3",
+    "gulp-size": "^2.0.0",
+    "gulp-uglify": "^1.3.0",
+    "vinyl-buffer": "^1.0.0",
+    "vinyl-source-stream": "^1.1.0"
   }
 }

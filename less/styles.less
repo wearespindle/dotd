@@ -18,6 +18,7 @@
 
 body {
     font-family: 'Oxygen', sans-serif;
+    overflow-y: hidden;
 }
 
 
@@ -48,17 +49,26 @@ select {
 
 #drawing-options {
     width: 250px;
-    position: absolute;
+    position: fixed;
     top: 0;
     right: 0;
     background: rgba(46, 53, 71, 0.9);
-    border: 3px solid #f2cc10;
+    border: 5px solid #2E3547;
+    border-top: 0;
     color: #fff;
-    padding: 10px;
+    padding: 5px;
 
     button {
         padding: 5px;
         margin: 5px 0;
+        width: 100%;
+        border: 1px solid #fff;
+
+        &.warning {
+            background: #a45454;
+            border: 1px solid #ccc;
+            color: #fff;
+        }
     }
 
     select {
@@ -70,11 +80,22 @@ select {
     display: none;
 }
 
-#card-day {
+#dolphin-day-container {
     position: absolute;
-    left: 10px;
-    top: 10px;
+    left: 5px;
+    top: 5px;
     font-size: 20px;
-    font-weight: bold;
+    font-weight: italic;
     color: #666;
+
+    img {
+        width: 30px;
+        margin-bottom: -6px;
+        display:inline-block;
+    }
+
+    span {
+        font-size: 30px;
+    }
+
 }
