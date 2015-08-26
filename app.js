@@ -12,6 +12,7 @@ var moment = require('moment')
 var common = require('./lib/common.js')
 
 var server = http.Server(app)
+var settings = require('./settings.json')
 var io = Io(server)
 
 var canvas, pathsCollection
@@ -178,8 +179,8 @@ app.get('/dotd.png', function(req, res) {
 })
 
 
-server.listen(3000, function() {
-    moment.locale('nl')
+server.listen(settings.port, function() {
+    moment.locale(settings.language)
     app.engine('handlebars', exphbs({defaultLayout: 'main'}))
     app.set('view engine', 'handlebars')
     app.dayOftheWeek = parseInt(moment().format('e'), 10)

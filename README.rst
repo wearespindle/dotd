@@ -12,5 +12,6 @@ Installation and usage
     cd dotd
     npm install
     gulp
+    cp settings.json.example settings.json
     node-dev app.js
     # Happy drawing!
