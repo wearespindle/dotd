@@ -3,8 +3,12 @@
 
 <div id="drawing-options">
     <button id="drawing-mode" class="btn btn-info">Edit scene</button><br>
-
+    <label for="stroke-color">Stroke Color</label>
+    <input type="color" id="stroke-color"><br/>
+    <label for="fill-color">Fill Color</label>
+    <input type="color" id="fill-color"><br/><br/>
     <div id="drawing-mode-options">
+
         <label for="drawing-mode-selector">Brush Type</label>
         <select id="drawing-mode-selector">
             <option value="pencil">Pencil</option>
@@ -20,11 +24,17 @@
         <span id="drawing-line-width-info">3</span>
         <input type="range" value="3" min="0" max="150" id="drawing-line-width"><br/>
 
-        <label for="drawing-color">Brush Color</label>
-        <input type="color" id="drawing-color"><br>
+        <button id="insert-text" class="btn btn-info">Insert text</button>
     </div>
 
     <div id="edit-mode-options">
         <button id="clear-canvas" class="btn warning">Clear Canvas</button><br>
+        <h2>Minihelp</h2>
+        <ul class="help">
+            <li><em>Delete</em> removes a selected object</li>
+            <li><em>Page Up</em> brings a selected object forward</li>
+            <li><em>Page Down</em> sends a selected object backward</li>
+        </ul>
+        <small>* Picture available from http(s)://domain/dotd.png</small>
     </div>
 </div>

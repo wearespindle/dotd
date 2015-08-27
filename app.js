@@ -4,6 +4,7 @@ var app = require('express')()
 var compression = require('compression')
 var exphbs = require('express-handlebars')
 var express = require('express')
+var favicon = require('serve-favicon')
 var Io = require('socket.io')
 var http = require('http')
 var loki = require('lokijs')
@@ -18,8 +19,12 @@ var io = Io(server)
 var canvas, pathsCollection
 
 
+/**
+ * Return the objects in the right order, this is important because
+ * fabricjs uses the array order to figure out zindex.
+ */
 function getFabricObjects() {
-    return app.db.getCollection('paths').find({day: parseInt(moment().format('e'), 10)})
+    return pathsCollection.find({day: parseInt(moment().format('e'), 10)}).reverse()
 }
 
 
@@ -27,7 +32,7 @@ function getFabricObjects() {
  *  Rebuild the canvas from Loki.
  */
 function getCanvas() {
-    var _canvas = fabric.createCanvasForNode(1900, 1080)
+    var _canvas = fabric.createCanvasForNode(1920, 1080)
     var fabricObjects = getFabricObjects()
 
     if(fabricObjects) {
@@ -42,7 +47,7 @@ function getCanvas() {
         objects.forEach(function(o) {
             // Please note that a deserialize custom brush(stroke property) is
             // an anonymous function coming from the client. Potential recipe
-            // for security issues.
+            // for security issues(!).
             _canvas.add(o)
         })
     })
@@ -80,42 +85,47 @@ io.on('connection', function(socket) {
 
 
     socket.on('object:modified', function(msg) {
-        var pathObj = JSON.parse(msg)
+        var rawObject = JSON.parse(msg)
+        var fabricObject = canvas.getObjectByUUID(rawObject.uuid)
 
-        var fabricObj = canvas.getObjectByUUID(pathObj.uuid)
-        if(fabricObj) {
-            fabricObj.set(pathObj)
-            var dbPath = pathsCollection.findOne({uuid: pathObj.uuid})
+        if(fabricObject) {
+            console.info('%s has modifications: %s', fabricObject.type, fabricObject.uuid)
+            if(fabricObject.type === 'group') {
+                // Somehow this is set to black during group serialization...
+                delete rawObject.fill
+            }
+            fabricObject.set(rawObject)
+            var dbPath = pathsCollection.findOne({uuid: fabricObject.uuid})
             if(dbPath) {
                 // Update all the properties of the fabric object.
-                Object.keys(pathObj).forEach(function(key) {
-                    dbPath[key] = pathObj[key]
+                Object.keys(rawObject).forEach(function(key) {
+                    dbPath[key] = rawObject[key]
                 })
                 pathsCollection.update(dbPath)
             } else {
-                console.warn('No object found in scene:', pathObj.uuid)
+                console.warn('No object found in scene:', rawObject.uuid)
             }
         } else {
-            console.warn('No object found in scene:', pathObj.uuid)
+            console.warn('No object found in scene:', rawObject.uuid)
         }
 
-        socket.broadcast.emit('object:modified', pathObj)
+        socket.broadcast.emit('object:modified', rawObject)
     })
 
 
     socket.on('object:removed', function(msg) {
-        var pathObj = JSON.parse(msg)
+        var rawObject = JSON.parse(msg)
 
-        var fabricObj = canvas.getObjectByUUID(pathObj.uuid)
+        var fabricObj = canvas.getObjectByUUID(rawObject.uuid)
         if(fabricObj) {
-            console.info('Removing %s with UUID: %s', pathObj.type, pathObj.uuid)
+            console.info('Removing %s with UUID: %s', rawObject.type, rawObject.uuid)
             canvas.remove(fabricObj)
-            var dbPath = pathsCollection.findOne({uuid: pathObj.uuid})
+            var dbPath = pathsCollection.findOne({uuid: rawObject.uuid})
             if(dbPath) {
                 pathsCollection.remove(dbPath)
-                socket.broadcast.emit('object:removed', pathObj)
+                socket.broadcast.emit('object:removed', rawObject)
             } else {
-                console.warn('No object found in scene:', pathObj.uuid)
+                console.warn('No object found in scene:', rawObject.uuid)
             }
         }
     })
@@ -123,21 +133,52 @@ io.on('connection', function(socket) {
 
     socket.on('canvas:clear', function() {
         console.info('Clearing canvas for today...')
-        var dbPaths = getFabricObjects()
-        pathsCollection.remove(dbPaths)
         canvas.clear()
         socket.broadcast.emit('canvas:clear')
+        var dbPaths = getFabricObjects()
+        pathsCollection.remove(dbPaths)
+    })
+
+    socket.on('canvas:bringForward', function(uuid) {
+        var fabricObj = canvas.getObjectByUUID(uuid)
+        canvas.bringForward(fabricObj)
+        socket.broadcast.emit('canvas:bringForward', uuid)
+
+        // TODO: Make this less insane
+        // This is ugly, but I don't know the proper way to update items' array
+        // index seperatly with lokijs. The db version should just
+        // reflect the same object order:
+        // https://github.com/kangax/fabric.js/blob/0715f15f288bc3b29b3f97d11f049441cc692a00/src/static_canvas.class.js#L1421)
+        var dbPaths = getFabricObjects()
+        pathsCollection.remove(dbPaths)
+        canvas.getObjects().forEach(function(fabricObject) {
+            pathsCollection.insert(JSON.parse(JSON.stringify(fabricObject)))
+        })
+    })
+
+    socket.on('canvas:sendBackwards', function(uuid) {
+        var fabricObj = canvas.getObjectByUUID(uuid)
+        canvas.sendBackwards(fabricObj)
+        socket.broadcast.emit('canvas:sendBackwards', uuid)
+
+        // TODO: Make this less insane (see comment in canvas:bringForward).
+        var dbPaths = getFabricObjects()
+        pathsCollection.remove(dbPaths)
+        canvas.getObjects().forEach(function(fabricObject) {
+            pathsCollection.insert(JSON.parse(JSON.stringify(fabricObject)))
+        })
     })
 })
 
 app.use(express.static('public'))
+app.use(favicon(__dirname + '/public/dolphin.png'))
 app.use(compression())
 
 
 app.get('/', function(req, res) {
     var serializedCanvas = JSON.parse(JSON.stringify(canvas))
-    serializedCanvas.objects.forEach(function(obj, i) {
-        if(obj.type === 'group') {
+    serializedCanvas.objects.forEach(function(rawObject, i) {
+        if(rawObject.type === 'group') {
             // Somehow this is set to black during group serialization...
             delete serializedCanvas.objects[i].fill
         }
@@ -157,6 +198,7 @@ app.get('/state.js', function(req, res) {
         if(obj.type === 'group') {
             // Somehow this is set to black during group serialization...
             delete serializedCanvas.objects[i].fill
+            delete serializedCanvas.objects[i].stroke
         }
     })
 
@@ -198,7 +240,7 @@ server.listen(settings.port, function() {
             pathsCollection = app.db.getCollection('paths')
             if (!pathsCollection) {
                 pathsCollection = app.db.addCollection('paths', {indices: ['uuid']})
-                pathsCollection.ensureUniqueIndex('uuid')
+                //pathsCollection.ensureUniqueIndex('uuid')
             }
 
             canvas = getCanvas()
