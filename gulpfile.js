@@ -12,7 +12,7 @@ var isProduction = true
 gulp.task('less', function() {
   gulp.src('less/*.less')
     .pipe(less())
-    .pipe(gulp.dest('public'))
+    .pipe(gulp.dest('public/css'))
     .pipe(livereload());
 })
 
@@ -24,7 +24,7 @@ gulp.task('browserify:app', function() {
         .pipe(source('dotd.js'))
         .pipe(buffer())
         // .pipe(ifElse(isProduction, uglify))
-        .pipe(gulp.dest('./public/'))
+        .pipe(gulp.dest('./public/js'))
         .pipe(size())
 })
 

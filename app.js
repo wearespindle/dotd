@@ -1,6 +1,6 @@
 'use strict'
 
-var app = require('express')()
+GLOBAL.app = require('express')()
 var compression = require('compression')
 var exphbs = require('express-handlebars')
 var express = require('express')
@@ -10,22 +10,12 @@ var http = require('http')
 var loki = require('lokijs')
 var moment = require('moment')
 
-var common = require('./lib/common.js')
+var common = require('./lib/common')
+var Events = require('./lib/events')
 
 var server = http.Server(app)
 var settings = require('./settings.json')
 var io = Io(server)
-
-var canvas, pathsCollection
-
-
-/**
- * Return the objects in the right order, this is important because
- * fabricjs uses the array order to figure out zindex.
- */
-function getFabricObjects() {
-    return pathsCollection.find({day: parseInt(moment().format('e'), 10)}).reverse()
-}
 
 
 /**
@@ -33,7 +23,9 @@ function getFabricObjects() {
  */
 function getCanvas() {
     var _canvas = fabric.createCanvasForNode(1920, 1080)
-    var fabricObjects = getFabricObjects()
+    var collection = app.db.addCollection('paths', {indices: ['uuid']})
+
+    var fabricObjects = collection.find({day: parseInt(moment().format('e'), 10)}).reverse()
 
     if(fabricObjects) {
         fabricObjects.forEach(function(obj) {
@@ -58,125 +50,20 @@ function getCanvas() {
 setInterval(function() {
     var currentDay = parseInt(moment().format('e'), 10)
     if(currentDay !== app.dayOftheWeek) {
-        canvas = getCanvas()
+        app.canvas = getCanvas()
     }
 }, 3000)
 
 
-io.on('connection', function(socket) {
-    // A client adds a path.
-    socket.on('object:added', function(msg) {
-        var pathObj = JSON.parse(msg)
-        if(pathObj.type === 'group' && 'objects' in pathObj) {
-            pathObj.__objects = pathObj.objects
-            delete pathObj.fill
-        }
-
-        fabric.util.enlivenObjects([pathObj], function(_objects) {
-            _objects.forEach(function(fabricObj) {
-                //delete fabricObj.fill
-                console.info('Adding %s with UUID: %s', pathObj.type, pathObj.uuid)
-                canvas.add(fabricObj)
-                pathsCollection.insert(pathObj)
-                socket.broadcast.emit('object:added', pathObj)
-            })
-        })
-    })
-
-
-    socket.on('object:modified', function(msg) {
-        var rawObject = JSON.parse(msg)
-        var fabricObject = canvas.getObjectByUUID(rawObject.uuid)
-
-        if(fabricObject) {
-            console.info('%s has modifications: %s', fabricObject.type, fabricObject.uuid)
-            if(fabricObject.type === 'group') {
-                // Somehow this is set to black during group serialization...
-                delete rawObject.fill
-            }
-            fabricObject.set(rawObject)
-            var dbPath = pathsCollection.findOne({uuid: fabricObject.uuid})
-            if(dbPath) {
-                // Update all the properties of the fabric object.
-                Object.keys(rawObject).forEach(function(key) {
-                    dbPath[key] = rawObject[key]
-                })
-                pathsCollection.update(dbPath)
-            } else {
-                console.warn('No object found in scene:', rawObject.uuid)
-            }
-        } else {
-            console.warn('No object found in scene:', rawObject.uuid)
-        }
-
-        socket.broadcast.emit('object:modified', rawObject)
-    })
-
-
-    socket.on('object:removed', function(msg) {
-        var rawObject = JSON.parse(msg)
-
-        var fabricObj = canvas.getObjectByUUID(rawObject.uuid)
-        if(fabricObj) {
-            console.info('Removing %s with UUID: %s', rawObject.type, rawObject.uuid)
-            canvas.remove(fabricObj)
-            var dbPath = pathsCollection.findOne({uuid: rawObject.uuid})
-            if(dbPath) {
-                pathsCollection.remove(dbPath)
-                socket.broadcast.emit('object:removed', rawObject)
-            } else {
-                console.warn('No object found in scene:', rawObject.uuid)
-            }
-        }
-    })
-
-
-    socket.on('canvas:clear', function() {
-        console.info('Clearing canvas for today...')
-        canvas.clear()
-        socket.broadcast.emit('canvas:clear')
-        var dbPaths = getFabricObjects()
-        pathsCollection.remove(dbPaths)
-    })
-
-    socket.on('canvas:bringForward', function(uuid) {
-        var fabricObj = canvas.getObjectByUUID(uuid)
-        canvas.bringForward(fabricObj)
-        socket.broadcast.emit('canvas:bringForward', uuid)
-
-        // TODO: Make this less insane
-        // This is ugly, but I don't know the proper way to update items' array
-        // index seperatly with lokijs. The db version should just
-        // reflect the same object order:
-        // https://github.com/kangax/fabric.js/blob/0715f15f288bc3b29b3f97d11f049441cc692a00/src/static_canvas.class.js#L1421)
-        var dbPaths = getFabricObjects()
-        pathsCollection.remove(dbPaths)
-        canvas.getObjects().forEach(function(fabricObject) {
-            pathsCollection.insert(JSON.parse(JSON.stringify(fabricObject)))
-        })
-    })
-
-    socket.on('canvas:sendBackwards', function(uuid) {
-        var fabricObj = canvas.getObjectByUUID(uuid)
-        canvas.sendBackwards(fabricObj)
-        socket.broadcast.emit('canvas:sendBackwards', uuid)
-
-        // TODO: Make this less insane (see comment in canvas:bringForward).
-        var dbPaths = getFabricObjects()
-        pathsCollection.remove(dbPaths)
-        canvas.getObjects().forEach(function(fabricObject) {
-            pathsCollection.insert(JSON.parse(JSON.stringify(fabricObject)))
-        })
-    })
-})
+io.on('connection', function(socket) {new Events(socket)})
 
 app.use(express.static('public'))
-app.use(favicon(__dirname + '/public/dolphin.png'))
+app.use(favicon(__dirname + '/public/img/dolphin.png'))
 app.use(compression())
 
 
 app.get('/', function(req, res) {
-    var serializedCanvas = JSON.parse(JSON.stringify(canvas))
+    var serializedCanvas = JSON.parse(JSON.stringify(app.canvas))
     serializedCanvas.objects.forEach(function(rawObject, i) {
         if(rawObject.type === 'group') {
             // Somehow this is set to black during group serialization...
@@ -192,8 +79,8 @@ app.get('/', function(req, res) {
  * Present the droodle data as a javascript file that can be
  * retrieved as GZIP script.
  */
-app.get('/state.js', function(req, res) {
-    var serializedCanvas = JSON.parse(JSON.stringify(canvas))
+app.get('/js/state.js', function(req, res) {
+    var serializedCanvas = JSON.parse(JSON.stringify(app.canvas))
     serializedCanvas.objects.forEach(function(obj, i) {
         if(obj.type === 'group') {
             // Somehow this is set to black during group serialization...
@@ -207,17 +94,29 @@ app.get('/state.js', function(req, res) {
 
 
 /**
- * Retrieve the current DOTD droodle as a png.
+ * Retrieve the current DOTD droodle as a PNG.
  */
 app.get('/dotd.png', function(req, res) {
     res.writeHead(200, { 'Content-Type': 'image/png' })
     var stream = canvas.createPNGStream()
-    stream.on('data', function(chunk) {
-        res.write(chunk)
-    });
-    stream.on('end', function() {
-        res.end()
-    });
+    stream.on('data', function(chunk) {res.write(chunk)})
+    stream.on('end', function() {res.end()})
+})
+
+
+/**
+ * Retrieve the current DOTD droodle as a SVG.
+ */
+app.get('/dotd.svg', function(req, res) {
+    res.send(canvas.toSVG())
+})
+
+
+/**
+ * Retrieve the current DOTD droodle as a serialized Fabric.js canvas.
+ */
+app.get('/dotd.json', function(req, res) {
+    res.send(JSON.parse(JSON.stringify(app.canvas)))
 })
 
 
@@ -237,13 +136,13 @@ server.listen(settings.port, function() {
         autoload: true,
         autoloadCallback: function() {
             // if database did not exist it will be empty so I will intitialize here
-            pathsCollection = app.db.getCollection('paths')
-            if (!pathsCollection) {
-                pathsCollection = app.db.addCollection('paths', {indices: ['uuid']})
-                //pathsCollection.ensureUniqueIndex('uuid')
+            var collection = app.db.getCollection('paths')
+            if (!collection) {
+                collection = app.db.addCollection('paths', {indices: ['uuid']})
+                collection.ensureUniqueIndex('uuid')
             }
 
-            canvas = getCanvas()
+            app.canvas = getCanvas()
         },
         env: 'NODEJS',
     })
